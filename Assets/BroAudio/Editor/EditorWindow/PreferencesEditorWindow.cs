@@ -440,7 +440,9 @@ namespace Ami.BroAudio.Editor.Setting
             DrawEmptyLine(1);
 #endif
             drawPosition.xMax += Gap;
-            
+
+            DrawEntityReferenceSettings(this, ref drawPosition);
+
             DrawManualInitializationToggle(drawPosition);
             DrawEmptyLine(1);
 
@@ -471,6 +473,17 @@ namespace Ami.BroAudio.Editor.Setting
             }
         }
 
+        private void DrawEntityReferenceSettings(EditorWindow window, ref Rect drawPosition)
+        {
+            using (NewSection("Audio Entity Reference Configuration", GetRectAndIterateLine(drawPosition)))
+            {
+                EditorGUI.PropertyField(
+                    GetRectAndIterateLine(drawPosition).AdjustWidth(-100f),
+                    _editorSettingSO.FindProperty(nameof(Editor.EditorSetting.EntityDirectoryMethod)),
+                    new GUIContent("Entity Paths", "The method used to generate the path to place Audio Entities at."));
+            }
+        }
+        
         private void DrawManualInitializationToggle(Rect drawPosition)
         {
             EditorGUI.BeginChangeCheck();

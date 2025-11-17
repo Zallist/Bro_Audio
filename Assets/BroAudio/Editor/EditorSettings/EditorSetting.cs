@@ -17,6 +17,13 @@ namespace Ami.BroAudio.Editor
             ConvertAndClearAllReferences,
         }
 
+		public enum EntityDirectoryMethods
+		{
+			Manual = 0,
+            UseAudioAsset = 1,
+			ReplicateFirstClipDirectory = 2
+		}
+
 		[System.Serializable]
 		public struct AudioTypeSetting
 		{
@@ -53,6 +60,8 @@ namespace Ami.BroAudio.Editor
 
         public List<AudioTypeSetting> AudioTypeSettings;
         public List<Color> SpectrumBandColors; 
+
+		public EntityDirectoryMethods EntityDirectoryMethod = EntityDirectoryMethods.UseAudioAsset;
 
 		public Color GetAudioTypeColor(BroAudioType audioType)
 		{
@@ -136,6 +145,9 @@ namespace Ami.BroAudio.Editor
             PingTheNewClipAfterSaveAs = FactorySettings.PingTheNewClipAfterSaveAs;
             ShowPlayButtonWhenEntityCollapsed = FactorySettings.ShowPlayButtonWhenEntityIsFolded;
             OpenLastEditAudioAsset = FactorySettings.OpenLastEditAudioAsset;
+
+            EntityDirectoryMethod = EntityDirectoryMethods.UseAudioAsset;
+
             CreateNewAudioTypeSettings();
             CreateDefaultSpectrumColors();
 		}

@@ -677,6 +677,8 @@ namespace Ami.BroAudio.Editor
                     }
                 }
 
+                ReorganizeAssets();
+
                 if (fullRefresh)
                 {
                     if (EditorWindow.HasOpenInstances<LibraryManagerWindow>())
@@ -688,6 +690,157 @@ namespace Ami.BroAudio.Editor
                             editorWindow.Refresh();
                         }
                     }
+                }
+            }
+
+            private static void ReorganizeAssets()
+            {
+                Dictionary<string, string> moveFromTo = new Dictionary<string, string>();
+
+                switch (EditorSetting.EntityDirectoryMethod)
+                {
+                    case EditorSetting.EntityDirectoryMethods.Manual:
+                        break;
+                    case EditorSetting.EntityDirectoryMethods.UseAudioAsset:
+                        foreach (var entity in AudioEntities)
+                            OrganizeUsingAudioAsset(entity);
+                        break;
+                    case EditorSetting.EntityDirectoryMethods.ReplicateFirstClipDirectory:
+                        foreach (var entity in AudioEntities)
+                            OrganizeUsingFirstClip(entity);
+                        break;
+                }
+
+                if (moveFromTo.Count == 0)
+                    return;
+
+                int movedFiles = 0;
+
+                try
+                {
+                    AssetDatabase.StartAssetEditing();
+
+                    foreach (var kvp in moveFromTo)
+                    {
+                        if (!Directory.Exists(Path.GetDirectoryName(kvp.Value)))
+                        {
+                            Directory.CreateDirectory(Path.GetDirectoryName(kvp.Value));
+                        }
+
+                        if (File.Exists(kvp.Value))  // already exists so can't move
+                        {
+                            Debug.LogWarning($"Failed to move {kvp.Key} to {kvp.Value}: already exists");
+                            continue;
+                        }
+
+                        var metaFile = AssetDatabase.GetTextMetaFilePathFromAssetPath(kvp.Key);
+                        File.Move(kvp.Key, kvp.Value);
+
+                        if (metaFile != null && File.Exists(metaFile))
+                            File.Move(metaFile, AssetDatabase.GetTextMetaFilePathFromAssetPath(kvp.Value));
+
+                        movedFiles++;
+                    }
+                }
+                finally
+                {
+                    AssetDatabase.StopAssetEditing();
+                }
+
+                if (movedFiles > 0)
+                    AssetDatabase.Refresh();
+
+                // delete any folders which are now empty
+                int deletedFolders = 0;
+                try
+                {
+                    AssetDatabase.StartAssetEditing();
+
+                    foreach (var kvp in moveFromTo)
+                        if (DeleteEmptyDirectory(Path.GetDirectoryName(kvp.Key)))
+                            deletedFolders++;
+                }
+                finally
+                {
+                    AssetDatabase.StopAssetEditing();
+                }
+
+                if (deletedFolders > 0)
+                    AssetDatabase.Refresh();
+
+                bool OrganizeUsingFirstClip(AudioEntity entity)
+                {
+                    // the directory we should be in is {AssetOutputPath}/{FirstClipRelativeDirectory ?? {UseAudioAsset}}/
+                    foreach (var clip in entity.Clips)
+                    {
+                        var audioClip = clip.GetAudioClip();
+
+                        if (audioClip != null)
+                        {
+                            var assetRelativeDirectory = Path.GetRelativePath(Application.dataPath, Path.GetDirectoryName(AssetDatabase.GetAssetPath(audioClip)));
+                            assetRelativeDirectory = Path.Combine(AssetOutputPath, assetRelativeDirectory);
+                            return SetupInDirectory(entity, assetRelativeDirectory);
+                        }
+                    }
+
+                    return OrganizeUsingAudioAsset(entity);
+                }
+
+                bool OrganizeUsingAudioAsset(AudioEntity entity)
+                {
+                    // the directory we should be in is {AssetOutputPath}/{AudioAsset.Name ?? ""}/
+
+                    if (entity.AudioAsset == null)
+                        return SetupInDirectory(entity, AssetOutputPath);
+
+                    return SetupInDirectory(entity, Path.Combine(AssetOutputPath, entity.AudioAsset.name));
+                }
+
+                bool SetupInDirectory(AudioEntity entity, string targetDirectory)
+                {
+                    var targetPath = Path.Combine(targetDirectory, $"{entity.name}.asset");
+                    var currentPath = AssetDatabase.GetAssetPath(entity);
+
+                    if (currentPath != null)
+                    {
+                        targetPath = Path.Combine(targetDirectory, Path.GetFileName(currentPath));
+                        currentPath = "Assets/" + Path.GetRelativePath(Application.dataPath, currentPath);
+                    }
+
+                    targetPath = "Assets/" + Path.GetRelativePath(Application.dataPath, targetPath);
+
+                    if (currentPath == null)
+                    {
+                        Debug.LogWarning($"Audio entity {entity.name} is not saved yet so we can't reorganize it to {targetPath}");
+                        return false;
+                    }
+
+                    if (!string.Equals(currentPath, targetPath, StringComparison.OrdinalIgnoreCase))
+                        moveFromTo[currentPath] = targetPath;
+
+                    return false;
+                }
+
+                static bool DeleteEmptyDirectory(string path)
+                {
+                    if (!Directory.Exists(path))
+                        return false;
+
+                    var fileSystemEntries = Directory.GetFileSystemEntries(path);
+
+                    if (fileSystemEntries.Length > 0)
+                        return false;
+
+                    var metaFile = AssetDatabase.GetTextMetaFilePathFromAssetPath(path);
+
+                    Directory.Delete(path);
+                    if (metaFile != null && File.Exists(metaFile))
+                        File.Delete(metaFile);
+
+                    // and check the parent too
+                    DeleteEmptyDirectory(Path.GetDirectoryName(path));
+
+                    return true;
                 }
             }
         }
