@@ -12,6 +12,7 @@ using static Ami.Extension.EditorScriptingExtension;
 using System.Reflection;
 using Ami.Extension.Reflection;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Ami.BroAudio.Editor
 {
@@ -714,8 +715,10 @@ namespace Ami.BroAudio.Editor
                 if (moveFromTo.Count == 0)
                     return;
 
+                int createdFolders = 0;
                 int movedFiles = 0;
 
+                // create all new folders up front
                 try
                 {
                     AssetDatabase.StartAssetEditing();
@@ -725,21 +728,35 @@ namespace Ami.BroAudio.Editor
                         if (!Directory.Exists(Path.GetDirectoryName(kvp.Value)))
                         {
                             Directory.CreateDirectory(Path.GetDirectoryName(kvp.Value));
+                            createdFolders++;
                         }
+                    }
+                }
+                finally
+                {
+                    AssetDatabase.StopAssetEditing();
+                }
 
-                        if (File.Exists(kvp.Value))  // already exists so can't move
+                if (createdFolders > 0)
+                    AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+
+                // and now move
+                try
+                {
+                    AssetDatabase.StartAssetEditing();
+
+                    foreach (var kvp in moveFromTo)
+                    {
+                        var error = AssetDatabase.MoveAsset(kvp.Key, kvp.Value);
+
+                        if (!string.IsNullOrEmpty(error))
                         {
-                            Debug.LogWarning($"Failed to move {kvp.Key} to {kvp.Value}: already exists");
-                            continue;
+                            Debug.LogWarning($"Failed to move {kvp.Key} to {kvp.Value}: {error}");
                         }
-
-                        var metaFile = AssetDatabase.GetTextMetaFilePathFromAssetPath(kvp.Key);
-                        File.Move(kvp.Key, kvp.Value);
-
-                        if (metaFile != null && File.Exists(metaFile))
-                            File.Move(metaFile, AssetDatabase.GetTextMetaFilePathFromAssetPath(kvp.Value));
-
-                        movedFiles++;
+                        else
+                        {
+                            movedFiles++;
+                        }
                     }
                 }
                 finally
@@ -748,25 +765,7 @@ namespace Ami.BroAudio.Editor
                 }
 
                 if (movedFiles > 0)
-                    AssetDatabase.Refresh();
-
-                // delete any folders which are now empty
-                int deletedFolders = 0;
-                try
-                {
-                    AssetDatabase.StartAssetEditing();
-
-                    foreach (var kvp in moveFromTo)
-                        if (DeleteEmptyDirectory(Path.GetDirectoryName(kvp.Key)))
-                            deletedFolders++;
-                }
-                finally
-                {
-                    AssetDatabase.StopAssetEditing();
-                }
-
-                if (deletedFolders > 0)
-                    AssetDatabase.Refresh();
+                    AssetDatabase.SaveAssets();
 
                 bool OrganizeUsingFirstClip(AudioEntity entity)
                 {
@@ -798,16 +797,16 @@ namespace Ami.BroAudio.Editor
 
                 bool SetupInDirectory(AudioEntity entity, string targetDirectory)
                 {
-                    var targetPath = Path.Combine(targetDirectory, $"{entity.name}.asset");
+                    var targetPath = Path.Combine(targetDirectory, $"{entity.name}.asset").Replace('\\', '/');
                     var currentPath = AssetDatabase.GetAssetPath(entity);
 
                     if (currentPath != null)
                     {
                         targetPath = Path.Combine(targetDirectory, Path.GetFileName(currentPath));
-                        currentPath = "Assets/" + Path.GetRelativePath(Application.dataPath, currentPath);
+                        currentPath = "Assets/" + Path.GetRelativePath(Application.dataPath, currentPath).Replace('\\', '/');
                     }
 
-                    targetPath = "Assets/" + Path.GetRelativePath(Application.dataPath, targetPath);
+                    targetPath = "Assets/" + Path.GetRelativePath(Application.dataPath, targetPath).Replace('\\', '/');
 
                     if (currentPath == null)
                     {
@@ -819,28 +818,6 @@ namespace Ami.BroAudio.Editor
                         moveFromTo[currentPath] = targetPath;
 
                     return false;
-                }
-
-                static bool DeleteEmptyDirectory(string path)
-                {
-                    if (!Directory.Exists(path))
-                        return false;
-
-                    var fileSystemEntries = Directory.GetFileSystemEntries(path);
-
-                    if (fileSystemEntries.Length > 0)
-                        return false;
-
-                    var metaFile = AssetDatabase.GetTextMetaFilePathFromAssetPath(path);
-
-                    Directory.Delete(path);
-                    if (metaFile != null && File.Exists(metaFile))
-                        File.Delete(metaFile);
-
-                    // and check the parent too
-                    DeleteEmptyDirectory(Path.GetDirectoryName(path));
-
-                    return true;
                 }
             }
         }
