@@ -9,7 +9,6 @@ namespace Ami.BroAudio.Runtime
     public partial class SoundManager : MonoBehaviour
     {
         private readonly Queue<IPlayable> _playbackQueue = new Queue<IPlayable>();
-        private AudioPlayer.PlaybackHandover _playbackHandoverDelegate;
 
         #region Play
         public IAudioPlayer Play(SoundID id, float fadeIn, IPlayableValidator customValidator = null)
@@ -80,12 +79,6 @@ namespace Ami.BroAudio.Runtime
             _combFilteringPreventer ??= new Dictionary<SoundID, AudioPlayer>();
             _combFilteringPreventer[id] = player;
 
-            if (pref.IsLoop(LoopType.SeamlessLoop) || pref.Entity.PlayMode == MulticlipsPlayMode.Chained)
-            {
-                _playbackHandoverDelegate ??= PlaybackHandover;
-                player.OnPlaybackHandover = _playbackHandoverDelegate;
-            }
-
             // Start loading addressable clips if needed
             StartLoadingAddressableClips(pref.Entity, id);
 
@@ -117,25 +110,13 @@ namespace Ami.BroAudio.Runtime
 #endif
         }
 
-        private void PlaybackHandover(SoundID id, InstanceWrapper<AudioPlayer> wrapper, PlaybackPreference pref, EffectType prevTrackEffect, float trackVolume, float pitch)
+        internal AudioPlayer GetPooledAudioPlayer(SoundID id, InstanceWrapper<AudioPlayer> wrapper)
         {
-            var newPlayer = _audioPlayerPool.Extract();
-            wrapper.UpdateInstance(newPlayer);
-            newPlayer.SetInstanceWrapper(wrapper);
-
-            newPlayer.SetVolume(trackVolume);
-            newPlayer.SetPitch(pitch);
-            newPlayer.SetPlaybackData(id, pref);
-            newPlayer.Play();
-            if (pref.ScheduledEndTime > 0d)
-            {
-                newPlayer.SetScheduledEndTime(pref.ScheduledEndTime);
-            }
-#if !UNITY_WEBGL
-            newPlayer.SetTrackEffect(prevTrackEffect, SetEffectMode.Override);
-#endif
-
-            newPlayer.OnPlaybackHandover = PlaybackHandover;
+            var player = _audioPlayerPool.Extract();
+            // we explicitly don't do this here
+            //wrapper.UpdateInstance(player);
+            player.SetInstanceWrapper(wrapper);
+            return player;
         }
 
         private void RemoveFromPreventer(AudioPlayer target)

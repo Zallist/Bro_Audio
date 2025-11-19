@@ -53,8 +53,11 @@ namespace Ami.BroAudio.Runtime
         IAudioPlayer ISchedulable.SetScheduledEndTime(double dspTime)
         {
             _pref.ScheduledEndTime = dspTime;
-            _onUpdate -= CheckScheduledEnd;
-            _onUpdate += CheckScheduledEnd;
+
+            if (!_onUpdateContainsScheduledEndCheck)
+            {
+                _onUpdate += CheckScheduledEnd;
+            }
 
             if (AudioSource.isPlaying)
             {
@@ -70,6 +73,7 @@ namespace Ami.BroAudio.Runtime
                 this.SafeStopCoroutine(_playbackControlCoroutine);
                 EndPlaying();
                 _onUpdate -= CheckScheduledEnd;
+                _onUpdateContainsScheduledEndCheck = false;
             }
         }
 
@@ -81,7 +85,7 @@ namespace Ami.BroAudio.Runtime
 
         private IEnumerator WaitForScheduledStartTime()
         {
-            while (_timeBeforeStartSchedule > 0)
+            while (_timeBeforeStartSchedule > 0 && !IsStopping)
             {
                 yield return null;
                 _timeBeforeStartSchedule -= Utility.GetDeltaTime();
@@ -91,6 +95,7 @@ namespace Ami.BroAudio.Runtime
         private void ClearScheduleEndEvents()
         {
             _onUpdate -= CheckScheduledEnd;
+            _onUpdateContainsScheduledEndCheck = false;
         }
     }
 }

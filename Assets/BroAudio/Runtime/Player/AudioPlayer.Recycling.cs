@@ -44,7 +44,6 @@ namespace Ami.BroAudio.Runtime
             _instanceWrapper?.Recycle();
             _instanceWrapper = null;
 
-            OnPlaybackHandover = null;
             AudioTrack = null;
 
             ID = SoundID.Invalid;
@@ -54,6 +53,7 @@ namespace Ami.BroAudio.Runtime
         {
             _onStart = null;
             _onUpdate = null;
+            _onUpdateContainsScheduledEndCheck = false;
             _onEnd = null;
         }
 
