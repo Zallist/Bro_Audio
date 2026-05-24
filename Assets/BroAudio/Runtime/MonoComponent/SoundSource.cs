@@ -54,7 +54,7 @@ namespace Ami.BroAudio
 
         private void OnDisable()
         {
-            if(_stopOnDisable && CurrentPlayer != null && CurrentPlayer.IsPlaying)
+            if(_stopOnDisable && CurrentPlayer != null && CurrentPlayer.IsActive && CurrentPlayer.ID.Equals(_sound))
             {
                 CurrentPlayer.Stop(_overrideFadeOut);
             }
